@@ -8,7 +8,16 @@ from arsenic import services, browsers, get_session
 from bs4 import BeautifulSoup
 import pandas as pd
 
-GECKODRIVER = './geckodriver'
+from sys import platform
+if platform == "linux" or platform == "linux2":
+    GECKODRIVER = './drivers/geckodrive_linux'
+elif platform == "darwin":
+    GECKODRIVER = './drivers/geckodrive_darwin'
+elif platform == "win32":
+    GECKODRIVER = './drivers/geckodrive.exe'
+
+
+# GECKODRIVER = '/Users/puse/.projects/python/custom/dynamic_web_scraper/geckodriver_linux'
 BASE_URL = 'https://www.crexi.com'
 
 
@@ -48,6 +57,7 @@ async def get_property_data(body_content):
 
 
 async def scraper(url, i=-1, timeout=60, start=None):
+    # service = services.Geckodriver(executable_path=GeckoDriverManager().install())
     service = services.Geckodriver(binary=GECKODRIVER)
     # Run Browser Headless
     browser = browsers.Firefox(**{'moz:firefoxOptions': {'args': ['-headless']}})

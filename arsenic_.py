@@ -13,7 +13,7 @@ import logging
 import structlog # pip install structlog
 
 
-GECKODRIVER='./geckodriver'
+GECKODRIVER='./geckodriver_linux'
 
 
 def store_links_as_df_pickle(datas=[], name='links.pkl'):
