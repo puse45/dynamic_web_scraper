@@ -9,13 +9,13 @@ from bs4 import BeautifulSoup
 import pandas as pd
 
 from sys import platform
+
 if platform == "linux" or platform == "linux2":
-    GECKODRIVER = './drivers/geckodrive_linux'
+    GECKODRIVER = './drivers/geckodriver_linux'
 elif platform == "darwin":
     GECKODRIVER = './drivers/geckodrive_darwin'
 elif platform == "win32":
-    GECKODRIVER = './drivers/geckodrive.exe'
-
+    GECKODRIVER = './drivers/geckodriver.exe'
 
 # GECKODRIVER = '/Users/puse/.projects/python/custom/dynamic_web_scraper/geckodriver_linux'
 BASE_URL = 'https://www.crexi.com'
@@ -39,14 +39,25 @@ async def get_parsable_html(body_html_str):
     return BeautifulSoup(body_html_str, 'html.parser')
 
 
+async def get_broker_data(body_content):
+    all_divs = body_content.find_all('div', class_='broker-info')
+    datas = []
+    for broker_selector in all_divs:
+        broker_name = broker_selector.find('span', class_='name_text').text
+        brokerage_logo = [img['src'] for img in broker_selector.findAll("img", {"class": "ng-star-inserted"})]
+        data = {"broker_name": broker_name, "brokerage_logo": brokerage_logo or ""}
+        datas.append(data)
+    return datas
+
+
 async def get_property_data(body_content):
     all_divs = body_content.find_all('crx-property-tile-aggregate', class_='ng-star-inserted')
     datas = []
-    for review_selector in all_divs:
-        propery_name = review_selector.find('div', class_='property-name').text
-        property_price = review_selector.find('div', class_='property-price').text
-        property_details = review_selector.find('div', class_='property-details').text
-        property_link = [a['href'] for a in review_selector.findAll("a", {"class": "cover-link"})]
+    for propery_selector in all_divs:
+        propery_name = propery_selector.find('div', class_='property-name').text
+        property_price = propery_selector.find('div', class_='property-price').text
+        property_details = propery_selector.find('div', class_='property-details').text
+        property_link = [a['href'] for a in propery_selector.findAll("a", {"class": "cover-link"})]
 
         data = {"property-name": propery_name, "property-price": property_price, "property-details": property_details,
                 "property_link": property_link[0]}
@@ -56,7 +67,7 @@ async def get_property_data(body_content):
     return datas
 
 
-async def scraper(url, i=-1, timeout=60, start=None):
+async def scraper(url, context, i=-1, timeout=60, start=None):
     # service = services.Geckodriver(executable_path=GeckoDriverManager().install())
     service = services.Geckodriver(binary=GECKODRIVER)
     # Run Browser Headless
@@ -72,24 +83,41 @@ async def scraper(url, i=-1, timeout=60, start=None):
         # Convert body to htmlparse
         content = await get_parsable_html(body)
         # Custom method to search for wanted files
-        '''Property fields'''
-        property_raw_data = await get_property_data(content)
-        # product_data = await get_product_data(url, content)
+        dataset = {}
+        if context == "property":
+            property_raw_data = await get_property_data(content)
+            urls = []
+            for j, y in enumerate(property_raw_data):
+                if j < 10:
+                    urls.append(y.get('property_link'))
+            start = time.time()
+            broker = await run(urls=urls, start=start, context="broker")
+            dataset = {
+                "property": property_raw_data,
+                "broker": broker,
+            }
+
+            # broker = await run(urls=urls, start=start, context="broker")
+
+        if context == "broker":
+            #     '''Broker fields'''
+            broker_raw_data = await get_broker_data(content)
+            return broker_raw_data
+
+
+
         if start != None:
             end = time.time() - start
             print(f'{i} took {end} seconds')
-        dataset = {
-            "property": property_raw_data
-            # "product_data": product_data
-        }
+
         return dataset
 
 
-async def run(urls, timeout=60, start=None):
+async def run(urls, timeout=60, start=None, context="property"):
     results = []
     for i, url in enumerate(urls):
         results.append(
-            asyncio.create_task(scraper(url, i=i, timeout=60, start=start))
+            asyncio.create_task(scraper(url, context, i=i, timeout=60, start=start))
         )
     list_of_links = await asyncio.gather(*results)
     return list_of_links
@@ -124,10 +152,12 @@ if __name__ == "__main__":
     set_arsenic_log_level()
     start = time.time()
     url = f'{BASE_URL}/properties'
-    urls = generate_pages(url=url, max_pages=10)
+    urls = generate_pages(url=url, max_pages=1)
     name = "link.pkl"
     results = asyncio.run(run(urls, start=start))
-    print(json.dumps(results))
+    print(results)
+
+    # print(json.dumps(results))
     end = time.time() - start
     print(f'total time is {end}')
     # df = store_links_as_df_pickle(results[0].get('property'), name=name)
